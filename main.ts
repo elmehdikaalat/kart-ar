@@ -19,12 +19,16 @@ import {
   MeshPhongMaterial,
   PerspectiveCamera,
   Scene,
-  WebGLRenderer
+  WebGLRenderer,
+  Quaternion,
+  Euler,
+  MathUtils
 } from 'three';
 
 // XR Emulator
 import { DevUI } from '@iwer/devui';
 import { XRDevice, metaQuest3 } from 'iwer';
+import { RingGeometry, MeshBasicMaterial } from 'three';
 
 // XR
 import { XRButton } from 'three/addons/webxr/XRButton.js';
@@ -66,21 +70,74 @@ import { XRController } from 'iwer/lib/device/XRController';
 // INSERT CODE HERE
 let camera : PerspectiveCamera, scene : Scene, renderer : WebGLRenderer;
 
+let hitTestSource: any = null;
+let referenceSpace: any = null;
+let viewerSpace: any = null;
+
+let reticle: Mesh;
+let kart: any = null;
+let isRunning = false;
+
 
 const timer = new Timer();
 timer.connect(document);
 
 // Main loop
-const animate = () => {
+// Main loop
+const animate = (timestamp?: number, frame?: XRFrame) => {
 
   timer.update();
   const delta = timer.getDelta();
   const elapsed = timer.getElapsed();
 
-  // can be used in shaders: uniforms.u_time.value = elapsed;
+
+  if (frame && hitTestSource && referenceSpace) {
+
+    const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+    if (hitTestResults.length > 0) {
+
+      const hit = hitTestResults[0];
+      const pose = hit.getPose(referenceSpace);
+
+      if (pose) {
+        reticle.visible = true;
+        reticle.matrix.fromArray(pose.transform.matrix);
+      }
+    }
+  }
+
+  if (kart && isRunning && frame) {
+
+    const pose = frame.getViewerPose(referenceSpace);
+
+    if (pose) {
+
+      const orientation = pose.transform.orientation;
+
+      const q = new Quaternion(
+        orientation.x,
+        orientation.y,
+        orientation.z,
+        orientation.w
+      );
+
+      const euler = new Euler().setFromQuaternion(q, 'YXZ');
+
+      kart.rotation.y = MathUtils.lerp(
+        kart.rotation.y,
+        euler.y,
+        0.1
+      );
+    }
+
+    kart.translateZ(-0.02);
+  }
 
   renderer.render(scene, camera);
 };
+
+
 
 
 const init = () => {
@@ -111,36 +168,87 @@ const init = () => {
   } ) );
 */
 
-  const xrButton = XRButton.createButton(renderer, {});
+  const ringGeo = new RingGeometry(0.08, 0.1, 32);
+  ringGeo.rotateX(-Math.PI / 2);
+
+  reticle = new Mesh(
+    ringGeo,
+    new MeshBasicMaterial({ color: 0x00ffff })
+  );
+
+  reticle.matrixAutoUpdate = false;
+  reticle.visible = false;
+  scene.add(reticle);
+
+  renderer.xr.addEventListener('sessionstart', async () => {
+
+  const session = renderer.xr.getSession();
+  if (!session) return;
+
+  referenceSpace = await session.requestReferenceSpace('local');
+  viewerSpace = await session.requestReferenceSpace('viewer');
+
+  if (session.requestHitTestSource) {
+
+  hitTestSource = await session.requestHitTestSource({
+    space: viewerSpace
+  });
+
+}
+
+});
+
+  const xrButton = XRButton.createButton(renderer, {
+    requiredFeatures: ['hit-test']
+  });
   xrButton.style.backgroundColor = 'skyblue';
   document.body.appendChild(xrButton);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  //controls.listenToKeyEvents(window); // optional
   controls.target.set(0, 1.6, 0);
   controls.update();
 
-  // Handle input: see THREE.js webxr_ar_cones
+  new GLTFLoader()
+    .setPath('assets/models/')
+    .load('kart-oobi.glb', (gltf) => {
 
-  const geometry = new CylinderGeometry(0, 0.05, 0.2, 32).rotateX(Math.PI / 2);
+      kart = gltf.scene;
+      kart.scale.set(0.3, 0.3, 0.3);
+      kart.visible = false;
+      scene.add(kart);
 
-  const onSelect = (event : any) => {
+    });
 
-    const material = new MeshPhongMaterial({ color: 0xffffff * Math.random() });
-    const mesh = new Mesh(geometry, material);
-    mesh.position.set(0, 0, - 0.3).applyMatrix4(controller.matrixWorld);
-    mesh.quaternion.setFromRotationMatrix(controller.matrixWorld);
-    scene.add(mesh);
+  renderer.domElement.addEventListener('click', () => {
 
-  }
+    if (!reticle.visible || !kart) return;
 
-  const controller = renderer.xr.getController(0);
-  controller.addEventListener('select', onSelect);
-  scene.add(controller);
+    kart.visible = true;
+    kart.position.setFromMatrixPosition(reticle.matrix);
 
+    isRunning = false;
+    createStartButton();
 
-  window.addEventListener('resize', onWindowResize, false);
+  });
 
+  function createStartButton() {
+
+  const btn = document.createElement('button');
+  btn.innerText = "START";
+  btn.style.position = "fixed";
+  btn.style.bottom = "40px";
+  btn.style.left = "50%";
+  btn.style.transform = "translateX(-50%)";
+  btn.style.padding = "20px";
+  btn.style.fontSize = "20px";
+
+  btn.onclick = () => {
+    isRunning = true;
+    btn.remove();
+  };
+
+  document.body.appendChild(btn);
+}
 }
 
 init();
