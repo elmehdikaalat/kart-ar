@@ -21,7 +21,9 @@ import {
   Scene,
   WebGLRenderer,
   RingGeometry,
-  MeshBasicMaterial
+  MeshBasicMaterial,
+  Group,
+  Vector3
 } from 'three';
 
 // XR Emulator
@@ -77,6 +79,7 @@ let reticle: Mesh;
 
 let hitTestSource: any = null;
 let hitTestSourceRequested = false;
+let kartPlaced = false;
 
 // Main loop
 const animate = (timestamp?: number, frame?: XRFrame) => {
@@ -84,6 +87,14 @@ const animate = (timestamp?: number, frame?: XRFrame) => {
   timer.update();
   const delta = timer.getDelta();
   const elapsed = timer.getElapsed();
+
+
+  const SPEED = 0.5; // m/s
+
+  if (kartPlaced && kart) {
+    const dir = new Vector3(0, 0, -1).applyQuaternion(kart.quaternion);
+    kart.position.addScaledVector(dir, SPEED * delta);
+  }
 
   if (frame) {
 
@@ -193,15 +204,17 @@ const init = () => {
 
   const geometry = new CylinderGeometry(0.1, 0.1, 0.2, 32).translate(0, 0.1, 0);
 
-  const onSelect = (event : any) => {
+  
 
-    const material = new MeshPhongMaterial( { color: 0xffffff * Math.random() } );
-    const mesh = new Mesh( geometry, material );
-    reticle.matrix.decompose( mesh.position, mesh.quaternion, mesh.scale );
-    mesh.scale.y = Math.random() * 2 + 1;
-    scene.add( mesh );
+  const onSelect = () => {
+    if (reticle.visible && kart) {
+      reticle.matrix.decompose(kart.position, kart.quaternion, new Vector3());
+      kart.scale.setScalar(0.5);
+      kartPlaced = true;
+    }
+  };
 
-  }
+  
 
   const controller = renderer.xr.getController(0);
   controller.addEventListener('select', onSelect);
@@ -213,6 +226,15 @@ const init = () => {
 }
 
 init();
+
+let kart: Group;
+
+const loader = new GLTFLoader();
+loader.load('assets/models/kart-oobi.glb', (gltf) => {
+  kart = gltf.scene;
+  kart.scale.setScalar(0.5);
+  scene.add(kart);
+});
 
 //
 
