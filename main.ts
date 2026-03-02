@@ -19,16 +19,12 @@ import {
   MeshPhongMaterial,
   PerspectiveCamera,
   Scene,
-  WebGLRenderer,
-  Quaternion,
-  Euler,
-  MathUtils
+  WebGLRenderer
 } from 'three';
 
 // XR Emulator
 import { DevUI } from '@iwer/devui';
 import { XRDevice, metaQuest3 } from 'iwer';
-import { RingGeometry, MeshBasicMaterial } from 'three';
 
 // XR
 import { XRButton } from 'three/addons/webxr/XRButton.js';
@@ -70,19 +66,15 @@ import { XRController } from 'iwer/lib/device/XRController';
 // INSERT CODE HERE
 let camera : PerspectiveCamera, scene : Scene, renderer : WebGLRenderer;
 
-let hitTestSource: any = null;
-let referenceSpace: any = null;
-let viewerSpace: any = null;
-
-let reticle: Mesh;
-let kart: any = null;
-let isRunning = false;
-
 
 const timer = new Timer();
 timer.connect(document);
 
-// Main loop
+let reticle: Mesh;
+
+let hitTestSource: any = null;
+let hitTestSourceRequested = false;
+
 // Main loop
 const animate = (timestamp?: number, frame?: XRFrame) => {
 
@@ -90,54 +82,59 @@ const animate = (timestamp?: number, frame?: XRFrame) => {
   const delta = timer.getDelta();
   const elapsed = timer.getElapsed();
 
+  if (frame) {
 
-  if (frame && hitTestSource && referenceSpace) {
+    const referenceSpace = renderer.xr.getReferenceSpace();
+    const session = renderer.xr.getSession();
 
-    const hitTestResults = frame.getHitTestResults(hitTestSource);
+    if (session && hitTestSourceRequested === false) {
 
-    if (hitTestResults.length > 0) {
+      session.requestReferenceSpace('viewer').then((viewerSpace) => {
 
-      const hit = hitTestResults[0];
-      const pose = hit.getPose(referenceSpace);
+        if (session.requestHitTestSource) {
 
-      if (pose) {
-        reticle.visible = true;
-        reticle.matrix.fromArray(pose.transform.matrix);
+          session.requestHitTestSource?.({ space: viewerSpace })?.then((source) => {
+            hitTestSource = source;
+          });
+
+        }
+
+      });
+
+      session.addEventListener('end', () => {
+        hitTestSourceRequested = false;
+        hitTestSource = null;
+      });
+
+      hitTestSourceRequested = true;
+    }
+
+    if (hitTestSource) {
+
+      const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+      if (hitTestResults.length > 0) {
+
+        const hit = hitTestResults[0];
+        const pose = hit.getPose(referenceSpace!);
+
+        if (pose) {
+          reticle.visible = true;
+          reticle.matrix.fromArray(pose.transform.matrix);
+        }
+
+      } else {
+
+        reticle.visible = false;
+
       }
-    }
-  }
 
-  if (kart && isRunning && frame) {
-
-    const pose = frame.getViewerPose(referenceSpace);
-
-    if (pose) {
-
-      const orientation = pose.transform.orientation;
-
-      const q = new Quaternion(
-        orientation.x,
-        orientation.y,
-        orientation.z,
-        orientation.w
-      );
-
-      const euler = new Euler().setFromQuaternion(q, 'YXZ');
-
-      kart.rotation.y = MathUtils.lerp(
-        kart.rotation.y,
-        euler.y,
-        0.1
-      );
     }
 
-    kart.translateZ(-0.02);
   }
 
   renderer.render(scene, camera);
 };
-
-
 
 
 const init = () => {
@@ -154,6 +151,17 @@ const init = () => {
   hemiLight.position.set(0.5, 1, 0.25);
   scene.add(hemiLight);
 
+
+  reticle = new Mesh(
+    new CylinderGeometry(0.1, 0.1, 0.01, 32),
+    new MeshPhongMaterial({ color: 0x00ffff })
+  );
+
+  reticle.rotation.x = -Math.PI / 2;
+  reticle.matrixAutoUpdate = false;
+  reticle.visible = false;
+  scene.add(reticle);
+
   renderer = new WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -168,36 +176,6 @@ const init = () => {
   } ) );
 */
 
-  const ringGeo = new RingGeometry(0.08, 0.1, 32);
-  ringGeo.rotateX(-Math.PI / 2);
-
-  reticle = new Mesh(
-    ringGeo,
-    new MeshBasicMaterial({ color: 0x00ffff })
-  );
-
-  reticle.matrixAutoUpdate = false;
-  reticle.visible = false;
-  scene.add(reticle);
-
-  renderer.xr.addEventListener('sessionstart', async () => {
-
-  const session = renderer.xr.getSession();
-  if (!session) return;
-
-  referenceSpace = await session.requestReferenceSpace('local');
-  viewerSpace = await session.requestReferenceSpace('viewer');
-
-  if (session.requestHitTestSource) {
-
-  hitTestSource = await session.requestHitTestSource({
-    space: viewerSpace
-  });
-
-}
-
-});
-
   const xrButton = XRButton.createButton(renderer, {
     requiredFeatures: ['hit-test']
   });
@@ -205,50 +183,31 @@ const init = () => {
   document.body.appendChild(xrButton);
 
   const controls = new OrbitControls(camera, renderer.domElement);
+  //controls.listenToKeyEvents(window); // optional
   controls.target.set(0, 1.6, 0);
   controls.update();
 
-  new GLTFLoader()
-    .setPath('assets/models/')
-    .load('kart-oobi.glb', (gltf) => {
+  // Handle input: see THREE.js webxr_ar_cones
 
-      kart = gltf.scene;
-      kart.scale.set(0.3, 0.3, 0.3);
-      kart.visible = false;
-      scene.add(kart);
+  const geometry = new CylinderGeometry(0, 0.05, 0.2, 32).rotateX(Math.PI / 2);
 
-    });
+  const onSelect = (event : any) => {
 
-  renderer.domElement.addEventListener('click', () => {
+    const material = new MeshPhongMaterial({ color: 0xffffff * Math.random() });
+    const mesh = new Mesh(geometry, material);
+    mesh.position.set(0, 0, - 0.3).applyMatrix4(controller.matrixWorld);
+    mesh.quaternion.setFromRotationMatrix(controller.matrixWorld);
+    scene.add(mesh);
 
-    if (!reticle.visible || !kart) return;
+  }
 
-    kart.visible = true;
-    kart.position.setFromMatrixPosition(reticle.matrix);
+  const controller = renderer.xr.getController(0);
+  controller.addEventListener('select', onSelect);
+  scene.add(controller);
 
-    isRunning = false;
-    createStartButton();
 
-  });
+  window.addEventListener('resize', onWindowResize, false);
 
-  function createStartButton() {
-
-  const btn = document.createElement('button');
-  btn.innerText = "START";
-  btn.style.position = "fixed";
-  btn.style.bottom = "40px";
-  btn.style.left = "50%";
-  btn.style.transform = "translateX(-50%)";
-  btn.style.padding = "20px";
-  btn.style.fontSize = "20px";
-
-  btn.onclick = () => {
-    isRunning = true;
-    btn.remove();
-  };
-
-  document.body.appendChild(btn);
-}
 }
 
 init();
