@@ -193,11 +193,11 @@ const init = () => {
 
   const onSelect = (event : any) => {
 
-    const material = new MeshPhongMaterial({ color: 0xffffff * Math.random() });
-    const mesh = new Mesh(geometry, material);
-    mesh.position.set(0, 0, - 0.3).applyMatrix4(controller.matrixWorld);
-    mesh.quaternion.setFromRotationMatrix(controller.matrixWorld);
-    scene.add(mesh);
+    const material = new MeshPhongMaterial( { color: 0xffffff * Math.random() } );
+    const mesh = new Mesh( geometry, material );
+    reticle.matrix.decompose( mesh.position, mesh.quaternion, mesh.scale );
+    mesh.scale.y = Math.random() * 2 + 1;
+    scene.add( mesh );
 
   }
 
