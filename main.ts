@@ -19,7 +19,9 @@ import {
   MeshPhongMaterial,
   PerspectiveCamera,
   Scene,
-  WebGLRenderer
+  WebGLRenderer,
+  RingGeometry,
+  MeshBasicMaterial
 } from 'three';
 
 // XR Emulator
@@ -56,6 +58,7 @@ import {
   GLTFLoader
 } from 'three/addons/loaders/GLTFLoader.js';
 import { XRController } from 'iwer/lib/device/XRController';
+import { ARButton } from 'three/examples/jsm/Addons.js';
 
 // Example of hard link to official repo for data, if needed
 // const MODEL_PATH = 'https://raw.githubusercontent.com/mrdoob/three.js/r173/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb';
@@ -153,8 +156,8 @@ const init = () => {
 
 
   reticle = new Mesh(
-    new CylinderGeometry(0.1, 0.1, 0.01, 32),
-    new MeshPhongMaterial({ color: 0x00ffff })
+    new RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
+    new MeshBasicMaterial()
   );
 
   reticle.rotation.x = -Math.PI / 2;
@@ -176,11 +179,10 @@ const init = () => {
   } ) );
 */
 
-  const xrButton = XRButton.createButton(renderer, {
+  const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ['hit-test']
   });
-  xrButton.style.backgroundColor = 'skyblue';
-  document.body.appendChild(xrButton);
+  document.body.appendChild(arButton);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   //controls.listenToKeyEvents(window); // optional
