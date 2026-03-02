@@ -191,7 +191,7 @@ const init = () => {
 
   // Handle input: see THREE.js webxr_ar_cones
 
-  const geometry = new CylinderGeometry(0, 0.05, 0.2, 32).rotateX(Math.PI / 2);
+  const geometry = new CylinderGeometry(0.1, 0.1, 0.2, 32).translate(0, 0.1, 0);
 
   const onSelect = (event : any) => {
 
