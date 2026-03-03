@@ -4,7 +4,7 @@ import glsl from 'vite-plugin-glsl';
 import { injectIWER } from "@iwsdk/vite-plugin-iwer";
 
 export default defineConfig({
-    base: "/three_vite_xr_ts",
+    base: "",
     clearScreen: false,
     optimizeDeps: {
         esbuildOptions: {
@@ -24,7 +24,7 @@ export default defineConfig({
     },
     server: {
         open: true,
-        allowedHosts: ['.trycloudflare.com']
+        allowedHosts: ['.trycloudflare.com', '.ngrok-free.dev']
     },
     plugins: [
         viteStaticCopy({
@@ -40,7 +40,7 @@ export default defineConfig({
         glsl(),
         injectIWER({
             device: "metaQuest3",
-            activation: "always",
+            activation: "localhost",
             verbose: true,
             sem: {
                 defaultScene: "living_room"

@@ -23,7 +23,11 @@ import {
   RingGeometry,
   MeshBasicMaterial,
   Group,
-  Vector3
+  Vector3,
+  Quaternion,
+  Raycaster,
+  Vector2,
+  Box3
 } from 'three';
 
 // XR Emulator
@@ -32,6 +36,9 @@ import { XRDevice, metaQuest3 } from 'iwer';
 
 // XR
 import { XRButton } from 'three/addons/webxr/XRButton.js';
+
+import * as CANNON from 'cannon-es';
+import CannonDebugger from 'cannon-es-debugger'
 
 // If you prefer to import the whole library, with the THREE prefix, use the following line instead:
 // import * as THREE from 'three'
@@ -81,19 +88,44 @@ let hitTestSource: any = null;
 let hitTestSourceRequested = false;
 let kartPlaced = false;
 
-// Main loop
+let kartMoving = false;
+let controller: any;
+let track: Group;
+let trackBounds: Box3;
+const holeZones: Box3[] = [];
+const world = new CANNON.World();
+
+
 const animate = (timestamp?: number, frame?: XRFrame) => {
 
   timer.update();
   const delta = timer.getDelta();
-  const elapsed = timer.getElapsed();
 
 
   const SPEED = 0.5; // m/s
 
-  if (kartPlaced && kart) {
-    const dir = new Vector3(0, 0, -1).applyQuaternion(kart.quaternion);
-    kart.position.addScaledVector(dir, SPEED * delta);
+    if (kartPlaced && kart) {
+    const target = new Vector3(0, 0, -5).applyMatrix4(controller.matrixWorld);
+    target.y = kart.position.y;
+
+    if (target.distanceTo(kart.position) > 0.01) {
+      kart.lookAt(target);
+      kart.rotateY(Math.PI);
+    }
+    
+    if (kartMoving && kartBody) {
+      const dir = new Vector3(0, 0, 1).applyQuaternion(kart.quaternion);
+      kartBody.velocity.set(dir.x * SPEED * 60, kartBody.velocity.y, dir.z * SPEED * 60);
+    } else if (kartBody) {
+      kartBody.velocity.set(0, kartBody.velocity.y, 0);
+    }
+
+    world.step(1/60, delta, 3);
+
+    if (kartBody) {
+      kart.position.copy(kartBody.position as any);
+      kart.quaternion.copy(kartBody.quaternion as any);
+    }
   }
 
   if (frame) {
@@ -153,6 +185,11 @@ const animate = (timestamp?: number, frame?: XRFrame) => {
 
 const init = () => {
   scene = new Scene();
+  world.gravity.set(0, -9.82, 0);
+  const groundBody = new CANNON.Body({ mass: 0 });
+  groundBody.addShape(new CANNON.Plane());
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(groundBody);
 
   const aspect = window.innerWidth / window.innerHeight;
   camera = new PerspectiveCamera(75, aspect, 0.1, 10); // meters
@@ -207,16 +244,52 @@ const init = () => {
   
 
   const onSelect = () => {
-    if (reticle.visible && kart) {
+    if (!kartPlaced && reticle.visible && kart) {
       reticle.matrix.decompose(kart.position, kart.quaternion, new Vector3());
-      kart.scale.setScalar(0.5);
+      kart.scale.setScalar(0.2);
+
+      kartBody.position.set(kart.position.x, kart.position.y, kart.position.z);
+      kartBody.velocity.set(0, 0, 0);
+
+      if (track) {
+        track.position.copy(kart.position);
+        track.quaternion.copy(kart.quaternion);
+        
+        kart.position.x += 0.5;
+        kart.position.y += 0.3;
+
+        trackBounds = new Box3().setFromObject(track);
+
+        holeZones.length = 0;
+        track.traverse((child) => {
+          if (child.name.startsWith('Box')) {
+            holeZones.push(new Box3().setFromObject(child));
+          }
+        });
+
+        holeZones.forEach((hole) => {
+          const center = new Vector3();
+          hole.getCenter(center);
+          const size = new Vector3();
+          hole.getSize(size);
+
+          const wallBody = new CANNON.Body({ mass: 0 });
+          wallBody.addShape(new CANNON.Box(new CANNON.Vec3(size.x/2, 0.5, size.z/2)));
+          wallBody.position.set(center.x, center.y, center.z);
+          world.addBody(wallBody);
+        });
+      }
+
       kartPlaced = true;
+      kartMoving = true;
+    } else if (kartPlaced) {
+      kartMoving = !kartMoving;
     }
   };
 
   
 
-  const controller = renderer.xr.getController(0);
+  controller = renderer.xr.getController(0);
   controller.addEventListener('select', onSelect);
   scene.add(controller);
 
@@ -228,13 +301,38 @@ const init = () => {
 init();
 
 let kart: Group;
-
+let kartBody: CANNON.Body;
 const loader = new GLTFLoader();
-loader.load('assets/models/kart-oobi.glb', (gltf) => {
+loader.load('/assets/models/kart-oobi.glb', (gltf) => {
   kart = gltf.scene;
-  kart.scale.setScalar(0.5);
+  kart.scale.setScalar(0.2);
   scene.add(kart);
+
+  kartBody = new CANNON.Body({
+    mass: 1,
+    shape: new CANNON.Box(new CANNON.Vec3(0.1, 0.05, 0.15))
+  });
+  world.addBody(kartBody);
 });
+
+const trackLoader = new GLTFLoader();
+trackLoader.load('/assets/models/piste.glb', (gltf) => {
+  track = gltf.scene;
+  track.scale.setScalar(0.2);
+  scene.add(track);
+
+  // Séparer la route et les trous
+  track.traverse((child) => {
+    if (child.name.startsWith('Box')) {
+      (child as Mesh).visible = false;
+      const box = new Box3().setFromObject(child);
+      holeZones.push(box);
+    }
+  });
+});
+
+
+
 
 //
 
