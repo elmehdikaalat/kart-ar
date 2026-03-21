@@ -6,7 +6,6 @@
 // see https://developer.mozilla.org/en-US/docs/Glossary/Tree_shaking)
 import { AmbientLight, Timer, CylinderGeometry, HemisphereLight, Mesh, PerspectiveCamera, Scene, WebGLRenderer, RingGeometry, MeshBasicMaterial, Vector3, Box3 } from 'three';
 import * as CANNON from 'cannon-es';
-import CannonDebugger from 'cannon-es-debugger';
 // If you prefer to import the whole library, with the THREE prefix, use the following line instead:
 // import * as THREE from 'three'
 // NOTE: three/addons alias is supported by Rollup: you can use it interchangeably with three/examples/jsm/  
@@ -43,7 +42,6 @@ let track;
 let trackBounds;
 const holeZones = [];
 const world = new CANNON.World();
-const cannonDebugger = new CannonDebugger(scene, world, {});
 const animate = (timestamp, frame) => {
     timer.update();
     const delta = timer.getDelta();
