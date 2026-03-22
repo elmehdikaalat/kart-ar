@@ -280,10 +280,10 @@ const init = () => {
           const wallY = surfaceY + wallH;
 
           [
-            { pos: [center.x,           wallY, hole.min.z - wallT], half: [hx + wallT, wallH, wallT] }, // North
-            { pos: [center.x,           wallY, hole.max.z + wallT], half: [hx + wallT, wallH, wallT] }, // South
-            { pos: [hole.min.x - wallT, wallY, center.z          ], half: [wallT, wallH, hz + wallT] }, // West
-            { pos: [hole.max.x + wallT, wallY, center.z          ], half: [wallT, wallH, hz + wallT] }, // East
+            { pos: [center.x, wallY, hole.min.z - wallT], half: [hx + wallT, wallH, wallT] }, // North
+            { pos: [center.x, wallY, hole.max.z + wallT], half: [hx + wallT, wallH, wallT] }, // South
+            { pos: [hole.min.x - wallT, wallY, center.z], half: [wallT, wallH, hz + wallT] }, // West
+            { pos: [hole.max.x + wallT, wallY, center.z], half: [wallT, wallH, hz + wallT] }, // East
           ].forEach(({ pos, half }) => {
             const b = new CANNON.Body({ mass: 0 });
             b.addShape(new CANNON.Box(new CANNON.Vec3(half[0], half[1], half[2])));
@@ -302,10 +302,10 @@ const init = () => {
         const outerY = surfaceY + outerH;
 
         [
-          { pos: [cx,                outerY, tb.min.z - outerT], half: [halfW, outerH, outerT] }, // North
-          { pos: [cx,                outerY, tb.max.z + outerT], half: [halfW, outerH, outerT] }, // South
-          { pos: [tb.min.x - outerT, outerY, cz               ], half: [outerT, outerH, halfD] }, // West
-          { pos: [tb.max.x + outerT, outerY, cz               ], half: [outerT, outerH, halfD] }, // East
+          { pos: [cx, outerY, tb.min.z - outerT], half: [halfW, outerH, outerT] }, // North
+          { pos: [cx, outerY, tb.max.z + outerT], half: [halfW, outerH, outerT] }, // South
+          { pos: [tb.min.x - outerT, outerY, cz], half: [outerT, outerH, halfD] }, // West
+          { pos: [tb.max.x + outerT, outerY, cz], half: [outerT, outerH, halfD] }, // East
         ].forEach(({ pos, half }) => {
           const b = new CANNON.Body({ mass: 0 });
           b.addShape(new CANNON.Box(new CANNON.Vec3(half[0], half[1], half[2])));
@@ -330,8 +330,11 @@ const init = () => {
 
   window.addEventListener('resize', onWindowResize, false);
 
-}
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ') onSelect();
+  });
 
+}
 
 init();
 
@@ -374,10 +377,10 @@ trackLoader.load('assets/models/piste.glb', (gltf) => {
 
 
 function onWindowResize() {
-
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 
-  renderer.setSize(window.innerWidth, window.innerHeight);
-
+  if (!renderer.xr.isPresenting) {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
 }
